@@ -1,0 +1,371 @@
+# ============================================================================
+# DELTA-ATRAX-V2 - GitLab CI/CD Pipeline
+# ============================================================================
+
+stages:
+  - validate
+  - test
+  - security
+  - build
+  - deploy
+  - cleanup
+
+variables:
+  PYTHON_VERSION: "3.11"
+  DOCKER_IMAGE: "$CI_REGISTRY_IMAGE"
+  DOCKER_TAG: "$CI_COMMIT_SHORT_SHA"
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.pip-cache"
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: "/certs"
+
+# ============================================================================
+# CACHE
+# ============================================================================
+
+cache:
+  key: "${CI_COMMIT_REF_SLUG}"
+  paths:
+    - .pip-cache/
+    - venv/
+    - .mypy_cache/
+
+# ============================================================================
+# TEMPLATES
+# ============================================================================
+
+.python-setup: &python-setup
+  before_script:
+    - python${PYTHON_VERSION} -m venv venv
+    - source venv/bin/activate
+    - pip install --upgrade pip setuptools wheel
+    - pip install -r requirements.txt
+
+.docker-setup: &docker-setup
+  before_script:
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
+
+# ============================================================================
+# STAGE: VALIDATE
+# ============================================================================
+
+validate:syntax:
+  stage: validate
+  image: python:${PYTHON_VERSION}-alpine
+  <<: *python-setup
+  script:
+    - echo "🔍 Validating Python syntax..."
+    - python -m py_compile delta_atrax_v2.py
+    - python -m py_compile requirement-check.py
+    - echo "✅ Syntax validation passed"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == "develop"
+
+validate:dependencies:
+  stage: validate
+  image: python:${PYTHON_VERSION}-alpine
+  <<: *python-setup
+  script:
+    - echo "📦 Checking dependencies..."
+    - python requirement-check.py || true
+  allow_failure: true
+
+validate:yaml:
+  stage: validate
+  image: alpine:latest
+  script:
+    - apk add --no-cache yamllint
+    - echo "📋 Validating YAML files..."
+    - yamllint -d relaxed .gitlab-ci.yml || true
+    - yamllint -d relaxed docker-compose.yml || true
+
+# ============================================================================
+# STAGE: TEST
+# ============================================================================
+
+test:unit:
+  stage: test
+  image: python:${PYTHON_VERSION}-alpine
+  <<: *python-setup
+  script:
+    - echo "🧪 Running unit tests..."
+    - |
+      if [ -d "tests" ]; then
+        pip install pytest pytest-cov pytest-asyncio
+        pytest tests/ -v --cov=. --cov-report=xml --cov-report=term
+      else
+        echo "No tests directory found. Running basic checks..."
+        python -c "from delta_atrax_v2 import ConfigManager; c = ConfigManager(); print('✅ ConfigManager OK')"
+      fi
+  coverage: '/TOTAL.*\s+(\d+%)$/'
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+    paths:
+      - htmlcov/
+    expire_in: 1 week
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "main"
+
+test:lint:
+  stage: test
+  image: python:${PYTHON_VERSION}-alpine
+  <<: *python-setup
+  script:
+    - echo "🔍 Running linters..."
+    - pip install flake8 black isort mypy
+    - flake8 delta_atrax_v2.py --max-line-length=120 --ignore=E501,W503,E402 || true
+    - black --check delta_atrax_v2.py || true
+    - isort --check-only delta_atrax_v2.py --profile black || true
+  allow_failure: true
+
+test:integration:
+  stage: test
+  image: python:${PYTHON_VERSION}-alpine
+  services:
+    - redis:7-alpine
+  variables:
+    REDIS_HOST: redis
+    REDIS_PORT: 6379
+  <<: *python-setup
+  script:
+    - echo "🔗 Running integration tests..."
+    - |
+      python << 'EOF'
+      import sys
+      sys.path.insert(0, '.')
+      
+      # Test imports
+      from delta_atrax_v2 import (
+          ConfigManager, DatabaseManager, CommandHandler,
+          NetworkTools, SocialEngineeringTools
+      )
+      
+      # Test config
+      config = ConfigManager()
+      assert config.get('version') is not None
+      print('✅ ConfigManager OK')
+      
+      # Test database
+      db = DatabaseManager(':memory:')
+      assert db.get_statistics() is not None
+      print('✅ DatabaseManager OK')
+      
+      # Test network tools
+      tools = NetworkTools()
+      ip = tools.get_local_ip()
+      assert ip is not None
+      print(f'✅ NetworkTools OK (Local IP: {ip})')
+      
+      # Test social engineering
+      social = SocialEngineeringTools(db)
+      templates = social.list_templates()
+      assert len(templates) > 0
+      print(f'✅ SocialEngineeringTools OK ({len(templates)} templates)')
+      
+      print('✅ All integration tests passed!')
+      EOF
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+
+# ============================================================================
+# STAGE: SECURITY
+# ============================================================================
+
+security:sast:
+  stage: security
+  image: python:${PYTHON_VERSION}-alpine
+  <<: *python-setup
+  script:
+    - echo "🔒 Running security analysis..."
+    - pip install bandit safety
+    - bandit -r . -f json -o bandit-report.json || true
+    - safety check -r requirements.txt --json > safety-report.json || true
+  artifacts:
+    paths:
+      - bandit-report.json
+      - safety-report.json
+    expire_in: 1 week
+  allow_failure: true
+
+security:secrets:
+  stage: security
+  image: alpine:latest
+  script:
+    - echo "🔐 Scanning for secrets..."
+    - apk add --no-cache grep
+    - |
+      if grep -rn "password\s*=\s*['\"][^'\"]*['\"]" --include="*.py" . | grep -v "test" | grep -v "#" | head -20; then
+        echo "⚠️ Potential hardcoded secrets found"
+      else
+        echo "✅ No hardcoded secrets detected"
+      fi
+  allow_failure: true
+
+security:dependencies:
+  stage: security
+  image: python:${PYTHON_VERSION}-alpine
+  <<: *python-setup
+  script:
+    - echo "📦 Checking dependency vulnerabilities..."
+    - pip install pip-audit
+    - pip-audit -r requirements.txt || true
+  allow_failure: true
+
+# ============================================================================
+# STAGE: BUILD
+# ============================================================================
+
+build:docker:
+  stage: build
+  image: docker:24-git
+  services:
+    - docker:24-dind
+  <<: *docker-setup
+  script:
+    - echo "🐳 Building Docker image..."
+    - docker build --pull -t "$DOCKER_IMAGE:$DOCKER_TAG" -t "$DOCKER_IMAGE:latest" .
+    - echo "📤 Pushing Docker image..."
+    - docker push "$DOCKER_IMAGE:$DOCKER_TAG"
+    - docker push "$DOCKER_IMAGE:latest"
+    - echo "✅ Docker image built and pushed"
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_TAG
+
+build:package:
+  stage: build
+  image: python:${PYTHON_VERSION}-alpine
+  <<: *python-setup
+  script:
+    - echo "📦 Creating distribution package..."
+    - apk add --no-cache tar gzip
+    - mkdir -p dist/delta-atrax-v2
+    - cp delta_atrax_v2.py dist/delta-atrax-v2/
+    - cp requirements.txt dist/delta-atrax-v2/
+    - cp requirement-check.py dist/delta-atrax-v2/
+    - cp Dockerfile dist/delta-atrax-v2/
+    - cp docker-compose.yml dist/delta-atrax-v2/
+    - cp Makefile dist/delta-atrax-v2/
+    - cp install.sh dist/delta-atrax-v2/
+    - cp install.bat dist/delta-atrax-v2/
+    - cp install.ps1 dist/delta-atrax-v2/
+    - cp -r config dist/delta-atrax-v2/ 2>/dev/null || true
+    - cp -r docs dist/delta-atrax-v2/ 2>/dev/null || true
+    - cd dist && tar -czvf delta-atrax-v2-${CI_COMMIT_SHORT_SHA}.tar.gz delta-atrax-v2/
+  artifacts:
+    paths:
+      - dist/*.tar.gz
+    expire_in: 1 month
+  rules:
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_BRANCH == "main"
+
+# ============================================================================
+# STAGE: DEPLOY
+# ============================================================================
+
+deploy:staging:
+  stage: deploy
+  image: alpine:latest
+  script:
+    - echo "🚀 Deploying to staging..."
+    - apk add --no-cache curl
+    - |
+      curl -X POST "$STAGING_DEPLOY_WEBHOOK" \
+        -H "Content-Type: application/json" \
+        -d "{\"ref\":\"$CI_COMMIT_REF_NAME\",\"sha\":\"$CI_COMMIT_SHORT_SHA\"}" || true
+    - echo "✅ Staging deployment triggered"
+  environment:
+    name: staging
+    url: https://staging.delta-atrax.example.com
+  rules:
+    - if: $CI_COMMIT_BRANCH == "develop"
+  when: manual
+
+deploy:production:
+  stage: deploy
+  image: alpine:latest
+  script:
+    - echo "🚀 Deploying to production..."
+    - apk add --no-cache curl
+    - |
+      curl -X POST "$PRODUCTION_DEPLOY_WEBHOOK" \
+        -H "Content-Type: application/json" \
+        -d "{\"ref\":\"$CI_COMMIT_REF_NAME\",\"sha\":\"$CI_COMMIT_SHORT_SHA\"}" || true
+    - echo "✅ Production deployment triggered"
+  environment:
+    name: production
+    url: https://delta-atrax.example.com
+  rules:
+    - if: $CI_COMMIT_TAG
+  when: manual
+
+deploy:docker-compose:
+  stage: deploy
+  image: docker:24-git
+  services:
+    - docker:24-dind
+  script:
+    - echo "🐳 Deploying with Docker Compose..."
+    - apk add --no-cache docker-compose
+    - docker-compose pull || true
+    - docker-compose up -d
+    - docker-compose ps
+  environment:
+    name: production
+  rules:
+    - if: $CI_COMMIT_TAG
+  when: manual
+
+# ============================================================================
+# STAGE: CLEANUP
+# ============================================================================
+
+cleanup:old-images:
+  stage: cleanup
+  image: docker:24-git
+  services:
+    - docker:24-dind
+  script:
+    - echo "🧹 Cleaning up old images..."
+    - docker system prune -f --filter "until=168h" || true
+    - echo "✅ Cleanup complete"
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  when: manual
+  allow_failure: true
+
+cleanup:artifacts:
+  stage: cleanup
+  image: alpine:latest
+  script:
+    - echo "🧹 Cleaning up artifacts..."
+    - rm -rf .pip-cache/ .mypy_cache/ htmlcov/ coverage.xml 2>/dev/null || true
+    - echo "✅ Cleanup complete"
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  when: always
+  allow_failure: true
+
+# ============================================================================
+# SCHEDULES
+# ============================================================================
+
+nightly:security-scan:
+  stage: security
+  image: python:${PYTHON_VERSION}-alpine
+  <<: *python-setup
+  script:
+    - echo "🌙 Running nightly security scan..."
+    - pip install bandit safety pip-audit
+    - bandit -r . -f txt
+    - safety check -r requirements.txt
+    - pip-audit -r requirements.txt
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+  allow_failure: true

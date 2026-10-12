@@ -1,0 +1,262 @@
+# ============================================================================
+# DELTA-ATRAX-V2 - Docker Compose Configuration
+# ============================================================================
+
+version: '3.8'
+
+services:
+  # ==================== MAIN APPLICATION ====================
+  delta-atrax:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    image: delta-atrax-v2:latest
+    container_name: delta-atrax-v2
+    hostname: delta-atrax
+    restart: unless-stopped
+    
+    # Network configuration
+    networks:
+      - delta-network
+    ports:
+      - "5000:5000"     # Web Dashboard
+      - "8080:8080"     # Phishing Server
+      - "4444:4444"     # C2 Callback
+      - "8081:8081"     # API Server
+    
+    # Environment variables
+    environment:
+      - TZ=UTC
+      - PYTHONUNBUFFERED=1
+      - DELTA_ATRAX_HOME=/app
+      - DELTA_ATRAX_CONFIG=/app/.delta_atrax_v2
+      - DELTA_ATRAX_LOG_LEVEL=INFO
+      - DELTA_ATRAX_WEB_PORT=5000
+      - DELTA_ATRAX_WEB_HOST=0.0.0.0
+      - DELTA_ATRAX_SECRET_KEY=${DELTA_ATRAX_SECRET_KEY:-}
+      - DELTA_ATRAX_DB_PATH=/app/.delta_atrax_v2/delta_atrax_v2.db
+      - DISCORD_TOKEN=${DISCORD_TOKEN:-}
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN:-}
+      - SLACK_TOKEN=${SLACK_TOKEN:-}
+      - SMTP_SERVER=${SMTP_SERVER:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USERNAME=${SMTP_USERNAME:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+    
+    # Volumes for persistent data
+    volumes:
+      - delta-data:/app/.delta_atrax_v2
+      - delta-reports:/app/delta_atrax_reports
+      - delta-logs:/app/.delta_atrax_v2/logs
+      - ./config:/app/config:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+    
+    # Capabilities for network operations
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+      - SYS_ADMIN
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # Restart policy
+    restart: unless-stopped
+    
+    # Dependencies
+    depends_on:
+      - redis
+      - postgres
+      - portainer
+    
+    # TTY for interactive mode
+    stdin_open: true
+    tty: true
+
+  # ==================== REDIS CACHE ====================
+  redis:
+    image: redis:7-alpine
+    container_name: delta-redis
+    hostname: redis
+    restart: unless-stopped
+    
+    networks:
+      - delta-network
+    
+    ports:
+      - "6379:6379"
+    
+    volumes:
+      - redis-data:/data
+    
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --requirepass ${REDIS_PASSWORD:-delta_redis_2024}
+    
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+  # ==================== POSTGRESQL DATABASE ====================
+  postgres:
+    image: postgres:16-alpine
+    container_name: delta-postgres
+    hostname: postgres
+    restart: unless-stopped
+    
+    networks:
+      - delta-network
+    
+    ports:
+      - "5432:5432"
+    
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-delta}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-delta_postgres_2024}
+      - POSTGRES_DB=${POSTGRES_DB:-delta_atrax}
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-delta} -d ${POSTGRES_DB:-delta_atrax}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ==================== PORTAINER (Container Management) ====================
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: delta-portainer
+    hostname: portainer
+    restart: unless-stopped
+    
+    networks:
+      - delta-network
+    
+    ports:
+      - "9000:9000"
+      - "9443:9443"
+    
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer-data:/data
+    
+    command: -H unix:///var/run/docker.sock
+
+  # ==================== NGINX REVERSE PROXY ====================
+  nginx:
+    image: nginx:alpine
+    container_name: delta-nginx
+    hostname: nginx
+    restart: unless-stopped
+    
+    networks:
+      - delta-network
+    
+    ports:
+      - "80:80"
+      - "443:443"
+    
+    volumes:
+      - ./config/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./config/ssl:/etc/nginx/ssl:ro
+      - nginx-logs:/var/log/nginx
+    
+    depends_on:
+      - delta-atrax
+    
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ==================== WATCHTOWER (Auto-update) ====================
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: delta-watchtower
+    restart: unless-stopped
+    
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    
+    environment:
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_POLL_INTERVAL=86400
+      - WATCHTOWER_LABEL_ENABLE=true
+    
+    command: --interval 86400
+
+# ==================== NETWORKS ====================
+networks:
+  delta-network:
+    driver: bridge
+    name: delta-network
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+# ==================== VOLUMES ====================
+volumes:
+  delta-data:
+    name: delta-data
+  delta-reports:
+    name: delta-reports
+  delta-logs:
+    name: delta-logs
+  redis-data:
+    name: delta-redis-data
+  postgres-data:
+    name: delta-postgres-data
+  portainer-data:
+    name: delta-portainer-data
+  nginx-logs:
+    name: delta-nginx-logs

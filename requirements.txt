@@ -1,0 +1,148 @@
+# ============================================================================
+# DELTA-ATRAX-V2 - Python Dependencies
+# Version: 2.0.0
+# ============================================================================
+
+# ==================== CORE DEPENDENCIES ====================
+colorama>=0.4.6
+requests>=2.31.0
+psutil>=5.9.0
+python-dateutil>=2.8.2
+pathlib2>=2.3.7; python_version < "3.4"
+typing-extensions>=4.8.0
+
+# ==================== CRYPTOGRAPHY ====================
+cryptography>=41.0.0
+pycryptodome>=3.19.0
+passlib>=1.7.4
+bcrypt>=4.0.0
+
+# ==================== NETWORKING ====================
+scapy>=2.5.0
+dnspython>=2.4.0
+whois>=0.9.4
+netifaces>=0.11.0
+mac-vendor-lookup>=0.1.12
+
+# ==================== SSH & REMOTE ACCESS ====================
+paramiko>=3.3.0
+sshtunnel>=0.4.0
+
+# ==================== WEB FRAMEWORK ====================
+flask>=3.0.0
+flask-socketio>=5.3.0
+flask-cors>=4.0.0
+gunicorn>=21.2.0
+eventlet>=0.34.0
+
+# ==================== WEB SCRAPING & AUTOMATION ====================
+beautifulsoup4>=4.12.0
+selenium>=4.15.0
+webdriver-manager>=4.0.0
+lxml>=4.9.0
+html5lib>=1.1
+
+# ==================== BOT INTEGRATIONS ====================
+discord.py>=2.3.0
+python-telegram-bot>=20.0
+telethon>=1.31.0
+slack-sdk>=3.23.0
+slack-bolt>=1.18.0
+
+# ==================== DATA VISUALIZATION ====================
+matplotlib>=3.8.0
+seaborn>=0.13.0
+numpy>=1.24.0
+pandas>=2.1.0
+plotly>=5.18.0
+
+# ==================== PDF & DOCUMENT GENERATION ====================
+reportlab>=4.0.0
+fpdf2>=2.7.0
+python-docx>=1.1.0
+openpyxl>=3.1.0
+xlsxwriter>=3.1.0
+
+# ==================== EMAIL ====================
+secure-smtplib>=0.1.1
+email-validator>=2.1.0
+
+# ==================== KEYLOGGER (Optional) ====================
+pynput>=1.7.6
+pyautogui>=0.9.54
+pyperclip>=1.8.2
+keyboard>=0.13.5
+mouse>=0.7.1
+
+# ==================== QR CODE & BARCODES ====================
+qrcode>=7.4.0
+pillow>=10.1.0
+python-barcode>=0.15.0
+
+# ==================== URL SHORTENING ====================
+pyshorteners>=1.0.1
+
+# ==================== GOOGLE APIs ====================
+google-auth>=2.23.0
+google-auth-oauthlib>=1.1.0
+google-api-python-client>=2.100.0
+google-cloud-core>=2.3.0
+
+# ==================== DATABASE ====================
+sqlalchemy>=2.0.0
+alembic>=1.12.0
+
+# ==================== ASYNC SUPPORT ====================
+aiohttp>=3.9.0
+aiofiles>=23.2.0
+asyncio>=3.4.3
+
+# ==================== LOGGING & MONITORING ====================
+loguru>=0.7.0
+rich>=13.6.0
+tqdm>=4.66.0
+
+# ==================== UTILITIES ====================
+python-dotenv>=1.0.0
+click>=8.1.0
+tabulate>=0.9.0
+termcolor>=2.3.0
+pyfiglet>=0.8.0
+halo>=0.0.31
+questionary>=2.0.0
+
+# ==================== SECURITY TESTING ====================
+python-nmap>=0.7.1
+shodan>=1.31.0
+censys>=2.2.0
+
+# ==================== PACKET MANIPULATION ====================
+pcapy-ng>=1.0.9
+dpkt>=1.9.8
+
+# ==================== COMPRESSION ====================
+py7zr>=0.21.0
+rarfile>=4.1
+patool>=1.15.0
+
+# ==================== SERIALIZATION ====================
+marshmallow>=3.20.0
+pydantic>=2.4.0
+
+# ==================== TESTING ====================
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.1.0
+pytest-mock>=3.12.0
+
+# ==================== CODE QUALITY ====================
+black>=23.10.0
+flake8>=6.1.0
+isort>=5.12.0
+mypy>=1.6.0
+pylint>=3.0.0
+
+# ==================== DOCUMENTATION ====================
+sphinx>=7.2.0
+mkdocs>=1.5.0
+mkdocs-material>=9.4.0

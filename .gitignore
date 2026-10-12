@@ -1,0 +1,91 @@
+# ============================================================================
+# DELTA-ATRAX-V2 - Git Ignore
+# ============================================================================
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+
+# Type Checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Application Data
+.delta_atrax_v2/
+delta_atrax_reports/
+backups/
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# Secrets
+.env
+*.pem
+*.key
+secrets/
+
+# Temporary Files
+temp/
+tmp/
+*.tmp
+*.temp
+
+# OS Files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Docker
+.docker/
+docker-compose.override.yml
+
+# CI/CD
+.gitlab-ci-local/
