@@ -1,5 +1,10 @@
 # delta-atrax-v2
 
+
+<div align="center">
+
+
+
 [![GitHub stars](https://img.shields.io/github/stars/Iankulani/delta-atrax-v2?style=for-the-badge&logo=github)](https://github.com/Iankulani/delta-atrax-v2/stargazers)
 [![GitHub forks](https://img.shields.io/github/forks/Iankulani/delta-atrax-v2?style=for-the-badge&logo=github)](https://github.com/Iankulani/delta-atrax-v2/network)
 [![GitHub watchers](https://img.shields.io/github/watchers/Iankulani/delta-atrax-v2?style=for-the-badge&logo=github)](https://github.com/Iankulani/delta-atrax-v2/watchers)
@@ -18,6 +23,9 @@
 [![Google Chat](https://img.shields.io/badge/Google%20Chat-Integration-00AC47?style=for-the-badge&logo=googlechat&logoColor=white)](https://github.com/Iankulani/delta-atrax-v2)
 [![iMessage](https://img.shields.io/badge/iMessage-Integration-34C759?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/Iankulani/delta-atrax-v2)
 [![GitLab CI](https://img.shields.io/badge/GitLab%20CI-Pipeline-FC6D26?style=for-the-badge&logo=gitlab&logoColor=white)](https://github.com/Iankulani/delta-atrax-v2)
+
+</div>
+
 
 Delta Atrax is an advanced cybersecurity tool developed to support cybersecurity professionals, ethical hackers, penetration testers, and security researchers in identifying, analyzing, and addressing digital security vulnerabilities. Designed to provide flexible security operations, Delta Atrax enables users to execute authorized cybersecurity commands through multiple communication platforms, including Discord, Telegram, Slack, Google Chat, iMessage, and its dedicated web application.
 
